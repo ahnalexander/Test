@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +9,8 @@ using MyApp.API.Middleware;
 using MyApp.Application.Common.Behaviors;
 using MyApp.Application.Common.Mapping;
 using MyApp.Infrastructure;
+using Polly;
+using Polly.Extensions.Http;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +21,17 @@ var endpoints = typeof(Program).Assembly
         (typeof(IEndpoint).IsAssignableFrom(x) || typeof(IEndpointHandlers).IsAssignableFrom(x)))
     .Select(x => Activator.CreateInstance(x)!)
     .ToList();
+
+builder.Services.AddMemoryCache();
+
+builder.Services.AddHttpClient("TestApi", client =>
+{
+    client.BaseAddress = new Uri("https://api.sampleapis.com/");
+})
+.AddPolicyHandler(HttpPolicyExtensions.HandleTransientHttpError().WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
+.AddPolicyHandler(HttpPolicyExtensions.HandleTransientHttpError().CircuitBreakerAsync(2, TimeSpan.FromSeconds(30)));
+
+builder.Services.AddHostedService<ApiSyncService>();
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
